@@ -1,0 +1,23 @@
+{
+  "name": "git-storage",
+  "version": "0.1.0",
+  "description": "Git-based storage and sync library",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "if (Test-Path dist) { Remove-Item -Recurse -Force dist }",
+    "test": "tsc -p tsconfig.test.json && node dist/test/basic.test.js"
+  },
+  "dependencies": {
+    "isomorphic-git": "^1.26.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "typescript": "^5.3.3"
+  },
+  "license": "MIT"
+}

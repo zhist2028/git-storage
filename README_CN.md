@@ -1,22 +1,22 @@
-﻿# git-storage
+﻿# git-storage（中文）
 
-Git-based storage and sync library (Node.js). Provides Redis-style APIs over a Git-backed data store with record-level merge, auto sync, and history compaction.
+基于 Git 的数据存储与同步库（Node.js）。提供类似 Redis 的 API，数据落盘为 Git 仓库，并支持自动同步与历史压缩。
 
-## Features
-- Key-based access for string/number/binary/object/array
-- Record-level merge (LWW by updatedAt, id tie-break)
-- 256-bucket storage to reduce conflicts
-- Auto sync on change + manual sync + optional interval sync
-- Auto history compaction (by write count/size)
-- Scan/keys/list operations
-- Sync status events
+## 特性
+- Key 访问：支持 string / number / binary / object / array
+- 记录级合并：LWW（按 updatedAt，id 作为 tie-break）
+- 256 桶分片，减少冲突
+- 自动同步（变更触发）+ 手动同步 + 可选定时同步
+- 自动历史压缩（按写入次数/大小阈值）
+- keys / scan / list 遍历
+- 同步状态事件
 
-## Installation
+## 安装
 ```bash
 npm install git-storage
 ```
 
-## Quick start
+## 快速开始
 ```ts
 import { GitStorage } from 'git-storage'
 
@@ -41,14 +41,14 @@ store.on('sync:finish', (info) => console.log('sync finish', info))
 store.on('sync:error', (info) => console.log('sync error', info))
 ```
 
-## API reference
+## API 参考
 
-### Constructor
+### 构造
 ```ts
 new GitStorage(config: GitStorageConfig)
 ```
 
-### Core operations
+### 基础操作
 ```ts
 get(key: string): Promise<any | null>
 set(key: string, value: any): Promise<void>
@@ -56,50 +56,50 @@ has(key: string): Promise<boolean>
 del(key: string): Promise<void>
 ```
 
-### Batch operations
+### 批量操作
 ```ts
 mget(keys: string[]): Promise<Array<any | null>>
 mset(values: Record<string, any>): Promise<void>
 ```
 
-### Metadata
+### 元数据
 ```ts
 type(key: string): Promise<ValueType | null>
 meta(key: string): Promise<RecordEntry | null>
 ```
 
-### Listing & scanning
+### 遍历与分页
 ```ts
 keys(pattern?: string): Promise<string[]>
 scan(cursor?: number, pattern?: string, count?: number): Promise<{ cursor: number; keys: string[] }>
 list(prefix?: string, limit?: number, offset?: number): Promise<string[]>
 ```
 
-### Sync
+### 同步
 ```ts
 sync(reason?: string): Promise<{ success: boolean; error?: string }>
 ```
 
-### Events
+### 事件
 ```ts
 on('sync:start', handler: (payload: SyncEventPayload) => void): Unsubscribe
 on('sync:finish', handler: (payload: SyncEventPayload) => void): Unsubscribe
 on('sync:error', handler: (payload: SyncEventPayload) => void): Unsubscribe
 ```
 
-### Configuration
+### 配置更新
 ```ts
 setConfig(config: Partial<GitStorageConfig>): Promise<void>
 ```
 
-## Configuration options
+## 配置项
 ```ts
 interface GitStorageConfig {
   repoUrl?: string
   branch?: string
   username?: string
   token?: string
-  dataDir?: string // default: process.cwd()/storage/.git-storage
+  dataDir?: string // 默认: process.cwd()/storage/.git-storage
   autoSync?: boolean
   syncOnChange?: boolean
   syncIntervalMinutes?: number
@@ -112,8 +112,8 @@ interface GitStorageConfig {
 }
 ```
 
-## Data model
-Each key maps to a record stored in a bucket file:
+## 数据模型
+每个 key 对应一条记录，存放在桶文件内：
 ```
 {
   id: string,
@@ -122,26 +122,26 @@ Each key maps to a record stored in a bucket file:
   createdAt: number,
   updatedAt: number,
   deletedAt?: number|null,
-  value: any // binary values are base64 strings
+  value: any // binary 保存为 base64 字符串
 }
 ```
 
-## Merge rules
-- Last-write-wins by `updatedAt`
-- If `updatedAt` ties, compare `id` lexicographically
-- `deletedAt` is a tombstone; deleted records are preserved for conflict resolution
+## 合并规则
+- 以 updatedAt 为准（LWW）
+- updatedAt 相同则按 id 字典序
+- deletedAt 为 tombstone（删除标记），用于冲突合并
 
-## Storage layout
-- Data is sharded into 256 bucket files: `data/00.json` ~ `data/ff.json`
-- Repo root is `dataDir`, containing `.git` and `data/`
+## 存储结构
+- 数据分成 256 个桶：`data/00.json` ~ `data/ff.json`
+- 仓库根目录为 `dataDir`，包含 `.git` 和 `data/`
 
-## History compaction
-- Auto compaction triggers when write count or write size crosses thresholds
-- Compaction deletes the local `.git`, re-initializes a single commit, and force-pushes
+## 历史压缩
+- 当写入次数或写入大小超过阈值时触发
+- 压缩过程会删除本地 `.git` 并重新初始化，再 force push
 
-## Notes
-- Sync uses force push to keep history minimal
-- Auto compaction is destructive to git history by design
+## 备注
+- 同步默认 force push（为减少历史）
+- 历史压缩是破坏性操作（按设计）
 
-## Status
-Core storage and sync logic implemented. Tests and advanced safety controls are pending.
+## 状态
+核心存储与同步逻辑已实现，测试覆盖仍可扩展。

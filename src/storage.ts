@@ -4,6 +4,7 @@ import { dirname, join } from 'path'
 import crypto from 'crypto'
 import * as git from 'isomorphic-git'
 import http from 'isomorphic-git/http/node'
+import { machineIdSync } from 'node-machine-id'
 import { hashKeyToBucket, patternToRegex, toBase64, fromBase64 } from './util'
 import type { GitStorageConfig, HistoryConfig, RecordEntry, SyncStatus, ValueType } from './types'
 import { StorageEvents } from './events'
@@ -74,6 +75,7 @@ export class GitStorage {
       username: config.username ?? 'git',
       token: config.token ?? '',
       dataDir: config.dataDir ?? join(process.cwd(), 'storage', '.git-storage'),
+      actorId: config.actorId ?? machineIdSync({ original: true }),
       autoSync: config.autoSync ?? true,
       syncOnChange: config.syncOnChange ?? true,
       syncIntervalMinutes: config.syncIntervalMinutes ?? 0,
@@ -96,6 +98,7 @@ export class GitStorage {
     if (next.username !== undefined) this.config.username = next.username
     if (next.token !== undefined) this.config.token = next.token
     if (next.dataDir !== undefined) this.config.dataDir = next.dataDir
+    if (next.actorId !== undefined) this.config.actorId = next.actorId
     if (next.autoSync !== undefined) this.config.autoSync = next.autoSync
     if (next.syncOnChange !== undefined) this.config.syncOnChange = next.syncOnChange
     if (next.syncIntervalMinutes !== undefined) this.config.syncIntervalMinutes = next.syncIntervalMinutes
@@ -157,6 +160,21 @@ export class GitStorage {
     return crypto.randomUUID()
   }
 
+  private valueForCompare(record: RecordEntry): string {
+    let value: any = record.value
+    if (record.type === 'binary') {
+      if (typeof value === 'string') {
+        return value
+      }
+      if (value instanceof Uint8Array || Buffer.isBuffer(value)) {
+        return toBase64(value)
+      }
+    }
+    const serialized = JSON.stringify(value)
+    if (serialized !== undefined) return serialized
+    return String(value)
+  }
+
   private scheduleSync(reason: string) {
     if (!this.config.autoSync || !this.config.syncOnChange) return
     if (this.syncTimer) clearTimeout(this.syncTimer)
@@ -215,6 +233,7 @@ export class GitStorage {
       type,
       createdAt: existing?.createdAt ?? now(),
       updatedAt: now(),
+      actorId: this.config.actorId,
       deletedAt: null,
       value: serializeValue(type, value)
     }
@@ -227,6 +246,7 @@ export class GitStorage {
       type: 'list',
       createdAt: existing?.createdAt ?? now(),
       updatedAt: now(),
+      actorId: this.config.actorId,
       deletedAt: null,
       value: { order }
     }
@@ -306,6 +326,7 @@ export class GitStorage {
       type: existing?.type ?? 'string',
       createdAt: existing?.createdAt ?? ts,
       updatedAt: ts,
+      actorId: this.config.actorId,
       deletedAt: ts,
       value: existing?.value ?? null
     }
@@ -695,6 +716,8 @@ export class GitStorage {
       }
     }
 
+    const isSameActor = Boolean(local.actorId && remote.actorId && local.actorId === remote.actorId)
+
     if (localDeleted || remoteDeleted) {
       if (localDeleted !== remoteDeleted) {
         const loser = winner === local ? remote : local
@@ -703,9 +726,15 @@ export class GitStorage {
       return { winner }
     }
 
+    if (isSameActor) return { winner }
+
     if (local.updatedAt !== remote.updatedAt || local.id !== remote.id) {
-      const loser = winner === local ? remote : local
-      return { winner, loser }
+      const localValue = this.valueForCompare(local)
+      const remoteValue = this.valueForCompare(remote)
+      if (localValue !== remoteValue) {
+        const loser = winner === local ? remote : local
+        return { winner, loser }
+      }
     }
     return { winner }
   }

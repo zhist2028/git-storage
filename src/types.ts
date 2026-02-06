@@ -6,6 +6,7 @@ export interface RecordMeta {
   type: ValueType
   createdAt: number
   updatedAt: number
+  actorId?: string
   deletedAt?: number | null
   conflictLoser?: { winnerId: string }
 }
@@ -35,6 +36,7 @@ export interface GitStorageConfig {
   username?: string
   token?: string
   dataDir?: string
+  actorId?: string
   autoSync?: boolean
   syncOnChange?: boolean
   syncIntervalMinutes?: number
@@ -47,5 +49,4 @@ export interface SyncEventPayload {
   reason: string
   status: SyncStatus
 }
-
 

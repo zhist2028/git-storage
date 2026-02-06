@@ -39,7 +39,7 @@ async function run() {
   const dataDir = process.env.GIT_STORAGE_DATA_DIR
   const syncAt = process.env.GIT_STORAGE_SYNC_AT
   const expectConflict = (process.env.GIT_STORAGE_EXPECT_CONFLICT ?? '0') === '1'
-  const machineId = machineIdSync({ original: true })
+  const machineId = machineIdSync(true)
 
   const store = new GitStorage({
     repoUrl,

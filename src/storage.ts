@@ -75,7 +75,7 @@ export class GitStorage {
       username: config.username ?? 'git',
       token: config.token ?? '',
       dataDir: config.dataDir ?? join(process.cwd(), 'storage', '.git-storage'),
-      actorId: config.actorId ?? machineIdSync({ original: true }),
+      actorId: config.actorId ?? machineIdSync(true),
       autoSync: config.autoSync ?? true,
       syncOnChange: config.syncOnChange ?? true,
       syncIntervalMinutes: config.syncIntervalMinutes ?? 0,

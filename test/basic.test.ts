@@ -54,6 +54,16 @@ async function run() {
   await store.del('count')
   assert.strictEqual(await store.get('count'), null)
 
+  await store.set('kv:delete', { a: 1 })
+  const kvDeletedMeta = await store.meta('kv:delete')
+  assert.ok(kvDeletedMeta)
+  await store.del('kv:delete')
+  const kvDeletedMeta2 = await store.meta('kv:delete')
+  assert.ok(kvDeletedMeta2)
+  const kvMerged = (store as any).mergeRecord(kvDeletedMeta2, kvDeletedMeta)
+  assert.ok(kvMerged)
+  assert.strictEqual(kvMerged?.deletedAt, kvDeletedMeta2?.deletedAt)
+
   const listKey = 'todos'
   assert.strictEqual(await store.llen(listKey), 0)
   await store.lpush(listKey, { title: 'draft' })

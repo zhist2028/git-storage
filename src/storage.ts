@@ -701,11 +701,20 @@ export class GitStorage {
     if (!local) return remote ?? null
     if (!remote) return local
 
-    const localUpdated = Number.isFinite(local.updatedAt) ? local.updatedAt : 0
-    const remoteUpdated = Number.isFinite(remote.updatedAt) ? remote.updatedAt : 0
+    const localDeleted = Boolean(local.deletedAt)
+    const remoteDeleted = Boolean(remote.deletedAt)
 
-    if (localUpdated > remoteUpdated) return local
-    if (remoteUpdated > localUpdated) return remote
+    const localTime = Number.isFinite(local.deletedAt) ? (local.deletedAt as number) :
+      (Number.isFinite(local.updatedAt) ? local.updatedAt : 0)
+    const remoteTime = Number.isFinite(remote.deletedAt) ? (remote.deletedAt as number) :
+      (Number.isFinite(remote.updatedAt) ? remote.updatedAt : 0)
+
+    if (localTime > remoteTime) return local
+    if (remoteTime > localTime) return remote
+
+    if (localDeleted !== remoteDeleted) {
+      return localDeleted ? local : remote
+    }
 
     return local.id >= remote.id ? local : remote
   }

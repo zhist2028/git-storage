@@ -124,6 +124,10 @@ export class GitStorage {
     return () => auth
   }
 
+  private remoteRef() {
+    return `origin/${this.config.branch}`
+  }
+
   private async ensureDir(path: string) {
     await fsp.mkdir(path, { recursive: true })
   }
@@ -609,7 +613,16 @@ export class GitStorage {
   private async ensureBranchCheckedOut() {
     const localBranches = await git.listBranches({ fs, dir: this.config.dataDir })
     if (localBranches.includes(this.config.branch)) {
-      await git.checkout({ fs, dir: this.config.dataDir, ref: this.config.branch })
+      try {
+        await git.checkout({ fs, dir: this.config.dataDir, ref: this.config.branch })
+      } catch (error) {
+        const message = String(error)
+        if (!message.includes('NotFoundError')) {
+          throw error
+        }
+        await git.branch({ fs, dir: this.config.dataDir, ref: this.config.branch })
+        await git.checkout({ fs, dir: this.config.dataDir, ref: this.config.branch })
+      }
       return
     }
 
@@ -628,8 +641,15 @@ export class GitStorage {
     }
 
     if (remoteBranches.includes(this.config.branch)) {
-      await git.checkout({ fs, dir: this.config.dataDir, ref: this.config.branch, remote: 'origin' })
-      return
+      try {
+        await git.checkout({ fs, dir: this.config.dataDir, ref: this.config.branch, remote: 'origin' })
+        return
+      } catch (error) {
+        const message = String(error)
+        if (!message.includes('NotFoundError')) {
+          throw error
+        }
+      }
     }
 
     await git.branch({ fs, dir: this.config.dataDir, ref: this.config.branch })
@@ -650,7 +670,7 @@ export class GitStorage {
   private async listRemoteBuckets(): Promise<string[]> {
     if (!this.config.repoUrl) return []
     try {
-      const files = await git.listFiles({ fs, dir: this.config.dataDir, ref: this.config.branch })
+      const files = await git.listFiles({ fs, dir: this.config.dataDir, ref: this.remoteRef() })
       return files
         .filter((file) => file.startsWith('data/') && file.endsWith('.json'))
         .map((file) => file.replace('data/', '').replace('.json', ''))
@@ -662,7 +682,7 @@ export class GitStorage {
   private async readRemoteBucket(bucket: string): Promise<Record<string, RecordEntry>> {
     if (!this.config.repoUrl) return {}
     try {
-      const oid = await git.resolveRef({ fs, dir: this.config.dataDir, ref: this.config.branch })
+      const oid = await git.resolveRef({ fs, dir: this.config.dataDir, ref: this.remoteRef() })
       const result = await git.readBlob({
         fs,
         dir: this.config.dataDir,
@@ -896,8 +916,6 @@ export class GitStorage {
   private async syncWithGit(reason: string) {
     try {
       await this.ensureRepoInitialized()
-      await this.ensureBranchCheckedOut()
-
       if (this.config.repoUrl) {
         try {
           await git.fetch({
@@ -915,6 +933,7 @@ export class GitStorage {
           }
         }
       }
+      await this.ensureBranchCheckedOut()
 
       const localBuckets = await this.listLocalBuckets()
       const remoteBuckets = await this.listRemoteBuckets()

@@ -86,6 +86,75 @@ const result = await store.sync('manual')
 if (!result.success) console.error(result.error)
 ```
 
+#### sync 函数说明
+- `sync(reason?: string)` 会主动触发一次完整同步流程
+- 返回 `{ success: boolean; error?: string }`
+- 若当前已有同步在进行中，会返回 `{ success: false, error: 'sync already in flight' }`
+- 同步会发出事件：
+  - `sync:start`：开始同步
+  - `sync:finish`：完成同步
+  - `sync:error`：同步过程中出现异常（如 fetch/checkout/合并/提交/推送/读写失败等），payload 中包含 `status.lastError`
+
+示例（事件订阅）：
+```ts
+import { GitStorage } from 'git-storage'
+
+const store = new GitStorage({ /* config */ })
+
+const offStart = store.on('sync:start', (payload) => {
+  console.log('sync start', payload)
+})
+
+const offFinish = store.on('sync:finish', (payload) => {
+  console.log('sync finish', payload)
+})
+
+const offError = store.on('sync:error', (payload) => {
+  console.error('sync error', payload.status.lastError)
+})
+
+// 取消订阅
+offStart()
+offFinish()
+offError()
+```
+- 同步完成后会根据写入次数/大小阈值决定是否进行历史压缩（见配置 `history`）
+
+## 同步逻辑
+同步过程（`sync()`）的核心流程如下：
+1. 初始化本地仓库（必要时 `git init`），并设置远端 `origin`
+2. `fetch` 远端分支
+3. 合并本地与远端数据桶（JSON）
+4. 处理列表冲突与顺序修正
+5. 提交并推送（默认 force push）
+
+### 合并顺序要点
+- 读取远端数据时使用 `origin/<branch>`，避免本地分支未同步导致读取失败
+- 合并完成后会规范化列表顺序，确保 `order` 与实际 item 一致
+
+## 冲突判断逻辑
+### KV（set/get）
+- 采用 LWW（Last Write Wins）：比较 `updatedAt`，较大者胜
+- `updatedAt` 相同则按 `id` 字典序作为 tie-break
+- KV 不保留败者（只保留胜者）
+
+### 列表（lpush/lpop 等）
+#### 1) 删除视为一种更新
+- 如果记录有 `deletedAt`，则用 `deletedAt` 作为“有效更新时间”
+- 否则用 `updatedAt`
+- 时间相同且一边删除 → 删除优先
+
+#### 2) 冲突合并规则
+- 先按“有效更新时间”选胜者（LWW）
+- 若为删除与更新冲突：保留胜者，并把败者插入列表（标记冲突）
+- 若两边都未删除：
+  - 同一台机器（`actorId` 相同）不会产生冲突项
+  - 不同机器且记录不一致（`updatedAt` 或 `id` 不同）并且值不同 → 将败者插入胜者之后并标记冲突
+
+#### 3) 冲突标记
+- 败者记录会带 `conflictLoser: { winnerId }`
+- 若 value 为 object，会额外追加 `__conflictLoser: true`
+
 ## API 参考
 
 ### 构造

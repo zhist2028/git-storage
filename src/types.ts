@@ -1,4 +1,4 @@
-﻿export type ValueType = 'string' | 'number' | 'binary' | 'object' | 'array'
+export type ValueType = 'string' | 'number' | 'binary' | 'object' | 'array' | 'list'
 
 export interface RecordMeta {
   id: string
@@ -7,6 +7,7 @@ export interface RecordMeta {
   createdAt: number
   updatedAt: number
   deletedAt?: number | null
+  conflictLoser?: { winnerId: string }
 }
 
 export interface RecordEntry extends RecordMeta {
@@ -46,3 +47,5 @@ export interface SyncEventPayload {
   reason: string
   status: SyncStatus
 }
+
+

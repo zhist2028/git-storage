@@ -4,7 +4,9 @@ Git-based storage and sync library (Node.js). Provides Redis-style APIs over a G
 
 ## Features
 - Key-based access for string/number/binary/object/array
+- List operations (lpush/rpush/lpop/rpop/llen/lrange/lindex/lset)
 - Record-level merge (LWW by updatedAt, id tie-break)
+- List conflict merge: losers are inserted after winners with conflict markers
 - 256-bucket storage to reduce conflicts
 - Auto sync on change + manual sync + optional interval sync
 - Auto history compaction (by write count/size)
@@ -36,9 +38,52 @@ const user = await store.get('user:1')
 const values = await store.mget(['user:1', 'user:2'])
 const keys = await store.keys('user:*')
 
+await store.lpush('todos', { title: 'buy milk' })
+await store.rpush('todos', { title: 'ship order' })
+const todoItems = await store.lrange('todos', 0, -1)
+
 store.on('sync:start', (info) => console.log('sync start', info))
 store.on('sync:finish', (info) => console.log('sync finish', info))
 store.on('sync:error', (info) => console.log('sync error', info))
+```
+
+## API usage
+### Basic KV
+```ts
+await store.set('profile:1', { name: 'Alice', age: 20 })
+const profile = await store.get('profile:1')
+const exists = await store.has('profile:1')
+await store.del('profile:1')
+```
+
+### Batch and scan
+```ts
+await store.mset({ 'a:1': 1, 'a:2': 2 })
+const values = await store.mget(['a:1', 'a:2', 'a:3'])
+const keys = await store.keys('a:*')
+const page = await store.scan(0, 'a:*', 2)
+```
+
+### Lists
+```ts
+await store.lpush('tasks', { title: 'draft' })
+await store.rpush('tasks', { title: 'ship' })
+const first = await store.lindex('tasks', 0)
+const all = await store.lrange('tasks', 0, -1)
+await store.lset('tasks', 0, { title: 'draft v2' })
+const popped = await store.lpop('tasks')
+```
+
+### List debug helpers
+```ts
+const items = await store.litems('tasks')
+const meta = await store.lmeta('tasks')
+```
+
+### Sync control
+```ts
+const result = await store.sync('manual')
+if (!result.success) console.error(result.error)
 ```
 
 ## API reference
@@ -73,6 +118,20 @@ meta(key: string): Promise<RecordEntry | null>
 keys(pattern?: string): Promise<string[]>
 scan(cursor?: number, pattern?: string, count?: number): Promise<{ cursor: number; keys: string[] }>
 list(prefix?: string, limit?: number, offset?: number): Promise<string[]>
+```
+
+### List operations
+```ts
+lpush(key: string, ...values: any[]): Promise<number>
+rpush(key: string, ...values: any[]): Promise<number>
+lpop(key: string, count?: number): Promise<any | null | any[]>
+rpop(key: string, count?: number): Promise<any | null | any[]>
+llen(key: string): Promise<number>
+lrange(key: string, start: number, stop: number): Promise<any[]>
+lindex(key: string, index: number): Promise<any | null>
+lset(key: string, index: number, value: any): Promise<void>
+litems(key: string): Promise<Array<{ itemId: string; value: any; conflictLoser?: { winnerId: string } }>>
+lmeta(key: string): Promise<{ order: string[]; createdAt: number | null; updatedAt: number | null } | null>
 ```
 
 ### Sync
@@ -118,18 +177,26 @@ Each key maps to a record stored in a bucket file:
 {
   id: string,
   key: string,
-  type: 'string'|'number'|'binary'|'object'|'array',
+  type: 'string'|'number'|'binary'|'object'|'array'|'list',
   createdAt: number,
   updatedAt: number,
   deletedAt?: number|null,
+  conflictLoser?: { winnerId: string },
   value: any // binary values are base64 strings
 }
 ```
+
+### List data layout
+- List meta record key: `list:<key>`
+- List item record key: `list:<key>:item:<itemId>`
+- List meta value: `{ order: string[] }`
 
 ## Merge rules
 - Last-write-wins by `updatedAt`
 - If `updatedAt` ties, compare `id` lexicographically
 - `deletedAt` is a tombstone; deleted records are preserved for conflict resolution
+- List item conflicts keep the winner and insert the loser after it
+- Delete vs update conflicts keep the update even if delete has a newer timestamp
 
 ## Storage layout
 - Data is sharded into 256 bucket files: `data/00.json` ~ `data/ff.json`

@@ -54,6 +54,35 @@ async function run() {
   await store.del('count')
   assert.strictEqual(await store.get('count'), null)
 
+  const listKey = 'todos'
+  assert.strictEqual(await store.llen(listKey), 0)
+  await store.lpush(listKey, { title: 'draft' })
+  await store.rpush(listKey, { title: 'ship' }, { title: 'done' })
+  assert.strictEqual(await store.llen(listKey), 3)
+  assert.deepStrictEqual(await store.lindex(listKey, 0), { title: 'draft' })
+  assert.deepStrictEqual(await store.lrange(listKey, 0, -1), [
+    { title: 'draft' },
+    { title: 'ship' },
+    { title: 'done' }
+  ])
+
+  await store.lset(listKey, 1, { title: 'ship v2' })
+  assert.deepStrictEqual(await store.lindex(listKey, 1), { title: 'ship v2' })
+
+  const poppedLeft = await store.lpop(listKey)
+  assert.deepStrictEqual(poppedLeft, { title: 'draft' })
+  const poppedRight = await store.rpop(listKey)
+  assert.deepStrictEqual(poppedRight, { title: 'done' })
+  assert.strictEqual(await store.llen(listKey), 1)
+
+  const items = await store.litems(listKey)
+  assert.strictEqual(items.length, 1)
+  assert.deepStrictEqual(items[0].value, { title: 'ship v2' })
+
+  const meta = await store.lmeta(listKey)
+  assert.ok(meta)
+  assert.strictEqual(meta?.order.length, 1)
+
   const syncResult = await store.sync('test')
   assert.strictEqual(syncResult.success, true)
 

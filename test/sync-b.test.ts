@@ -27,10 +27,14 @@ async function waitUntil(targetIso?: string) {
 }
 
 async function run() {
-  const repoUrl = requireEnv('GIT_STORAGE_REPO_URL')
-  const username = requireEnv('GIT_STORAGE_USERNAME')
-  const token = requireEnv('GIT_STORAGE_TOKEN')
-  const session = requireEnv('GIT_STORAGE_SESSION')
+  // const repoUrl = requireEnv('GIT_STORAGE_REPO_URL')
+  // const username = requireEnv('GIT_STORAGE_USERNAME')
+  // const token = requireEnv('GIT_STORAGE_TOKEN')
+  // const session = requireEnv('GIT_STORAGE_SESSION')
+    const repoUrl = 'https://gitee.com/hezitation/git-storage-database.git'
+  const username = 'hezitation'
+  const token = 'bfc219db3b6dd85d043724a0d2e97559'
+  const session = 'sss'
   const branch = process.env.GIT_STORAGE_BRANCH ?? 'main'
   const dataDir = process.env.GIT_STORAGE_DATA_DIR
   const syncAt = process.env.GIT_STORAGE_SYNC_AT

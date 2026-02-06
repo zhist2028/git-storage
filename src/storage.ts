@@ -677,16 +677,35 @@ export class GitStorage {
     const localDeleted = Boolean(local.deletedAt)
     const remoteDeleted = Boolean(remote.deletedAt)
 
-    if (localDeleted && !remoteDeleted) return { winner: remote }
-    if (remoteDeleted && !localDeleted) return { winner: local }
+    const localTime = Number.isFinite(local.deletedAt) ? (local.deletedAt as number) :
+      (Number.isFinite(local.updatedAt) ? local.updatedAt : 0)
+    const remoteTime = Number.isFinite(remote.deletedAt) ? (remote.deletedAt as number) :
+      (Number.isFinite(remote.updatedAt) ? remote.updatedAt : 0)
 
-    const winner = this.mergeRecord(local, remote)
-    if (!winner) return { winner: null }
-    if (!localDeleted && !remoteDeleted) {
-      const loser = winner === local ? remote : local
-      if (local.updatedAt !== remote.updatedAt || local.id !== remote.id) {
+    let winner: RecordEntry
+    if (localTime > remoteTime) {
+      winner = local
+    } else if (remoteTime > localTime) {
+      winner = remote
+    } else {
+      if (localDeleted !== remoteDeleted) {
+        winner = localDeleted ? local : remote
+      } else {
+        winner = local.id >= remote.id ? local : remote
+      }
+    }
+
+    if (localDeleted || remoteDeleted) {
+      if (localDeleted !== remoteDeleted) {
+        const loser = winner === local ? remote : local
         return { winner, loser }
       }
+      return { winner }
+    }
+
+    if (local.updatedAt !== remote.updatedAt || local.id !== remote.id) {
+      const loser = winner === local ? remote : local
+      return { winner, loser }
     }
     return { winner }
   }

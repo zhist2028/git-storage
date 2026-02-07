@@ -146,8 +146,21 @@ export class GitStorage {
     try {
       const raw = await fsp.readFile(filePath, 'utf8')
       return JSON.parse(raw)
-    } catch {
+    } catch (error) {
+      this.config.logger('readBucket failed', { bucket, error: String(error) })
       return {}
+    }
+  }
+
+  private async readBucketForLists(bucket: string): Promise<Record<string, RecordEntry> | null> {
+    const filePath = this.dataPath(bucket)
+    try {
+      const raw = await fsp.readFile(filePath, 'utf8')
+      if (!raw.includes(`"${LIST_PREFIX}`)) return null
+      return JSON.parse(raw)
+    } catch (error) {
+      this.config.logger('readBucketForLists failed', { bucket, error: String(error) })
+      return null
     }
   }
 
@@ -829,7 +842,8 @@ export class GitStorage {
     const itemMap = new Map<string, Map<string, { record: RecordEntry }>>()
 
     for (const bucket of buckets) {
-      const data = await this.readBucket(bucket)
+      const data = await this.readBucketForLists(bucket)
+      if (!data) continue
       for (const [key, record] of Object.entries(data)) {
         if (!key.startsWith(LIST_PREFIX)) continue
         const parsed = this.parseListItemKey(key)
@@ -991,26 +1005,42 @@ export class GitStorage {
     if (!this.config.repoUrl) return
     const gitDir = join(this.config.dataDir, '.git')
     const hasGitDir = await this.pathExists(gitDir)
-    if (hasGitDir) {
-      await fsp.rm(gitDir, { recursive: true, force: true })
+    const backupDir = hasGitDir ? join(this.config.dataDir, `.git.backup-${Date.now()}`) : null
+
+    if (hasGitDir && backupDir) {
+      await fsp.rename(gitDir, backupDir)
     }
-    await git.init({ fs, dir: this.config.dataDir, defaultBranch: this.config.branch })
-    await git.addRemote({ fs, dir: this.config.dataDir, remote: 'origin', url: this.config.repoUrl })
-    await this.stageAllChanges()
-    await git.commit({
-      fs,
-      dir: this.config.dataDir,
-      message: 'compact history',
-      author: { name: 'git-storage', email: 'sync@git-storage.local' }
-    })
-    await git.push({
-      fs,
-      http,
-      dir: this.config.dataDir,
-      remote: 'origin',
-      ref: this.config.branch,
-      force: true,
-      ...(this.getAuthHandler() ? { onAuth: this.getAuthHandler() } : {})
-    })
+
+    try {
+      await git.init({ fs, dir: this.config.dataDir, defaultBranch: this.config.branch })
+      await git.addRemote({ fs, dir: this.config.dataDir, remote: 'origin', url: this.config.repoUrl })
+      await this.stageAllChanges()
+      await git.commit({
+        fs,
+        dir: this.config.dataDir,
+        message: 'compact history',
+        author: { name: 'git-storage', email: 'sync@git-storage.local' }
+      })
+      await git.push({
+        fs,
+        http,
+        dir: this.config.dataDir,
+        remote: 'origin',
+        ref: this.config.branch,
+        force: true,
+        ...(this.getAuthHandler() ? { onAuth: this.getAuthHandler() } : {})
+      })
+      if (backupDir) {
+        await fsp.rm(backupDir, { recursive: true, force: true })
+      }
+    } catch (error) {
+      if (await this.pathExists(gitDir)) {
+        await fsp.rm(gitDir, { recursive: true, force: true })
+      }
+      if (backupDir && (await this.pathExists(backupDir))) {
+        await fsp.rename(backupDir, gitDir)
+      }
+      throw error
+    }
   }
 }

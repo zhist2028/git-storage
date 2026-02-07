@@ -12,7 +12,8 @@
     "clean": "if (Test-Path dist) { Remove-Item -Recurse -Force dist }",
     "test": "tsc -p tsconfig.test.json && node dist/test/basic.test.js",
     "test:sync-a": "tsc -p tsconfig.test.json && node dist/test/sync-a.test.js",
-    "test:sync-b": "tsc -p tsconfig.test.json && node dist/test/sync-b.test.js"
+    "test:sync-b": "tsc -p tsconfig.test.json && node dist/test/sync-b.test.js",
+    "test:corrupt": "tsc -p tsconfig.test.json && node dist/test/corrupt-bucket.test.js"
   },
   "dependencies": {
     "isomorphic-git": "^1.26.0",
